@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from backend.db import database
@@ -141,49 +141,64 @@ class TransferStatusResponse(BaseModel):
 
 def process_transfer_in_background(job_id: str, source_collection_id: uuid.UUID,
                                    target_collection_id: uuid.UUID,
-                                   company_ids: list[int], db_session):
+                                   company_ids: list[int], db_session: Session):
     """Background task to process company transfers in batches"""
     try:
         batch_size = 20
         total_companies = len(company_ids)
         added_count = 0
+        processed_count = 0
 
         # Update job status
         transfer_jobs[job_id]["status"] = "in_progress"
         transfer_jobs[job_id]["total"] = total_companies
 
-        for i in range(0, total_companies, batch_size):
-            batch = company_ids[i:i+batch_size]
-            batchLength = len(batch)
-            batch_added = 0
+        # Get all the associations that already exist for the request
+        # Once at the start of the request
+        existing_associations = db_session.query(
+            database.CompanyCollectionAssociation.company_id
+        ).filter(
+            database.CompanyCollectionAssociation.collection_id == target_collection_id,
+        ).all()
 
-            # Process batch
-            for company_id in batch:
-                existing_association = db_session.query(database.CompanyCollectionAssociation).filter(
-                    database.CompanyCollectionAssociation.company_id == company_id,
-                    database.CompanyCollectionAssociation.collection_id == target_collection_id
-                ).first()
+        # Extract company IDs from the query result tuples
+        existing_company_ids = [row[0] for row in existing_associations]
 
-                if not existing_association:
-                    association = database.CompanyCollectionAssociation(
-                        company_id=company_id,
-                        collection_id=target_collection_id
-                    )
-                    db_session.add(association)
-                    batch_added += 1
+        # Update progress to show existing associations as completed
+        added_count += len(existing_company_ids)
+        processed_count += added_count
 
+        # Get all the new associations to insert once at the start of the request
+        new_company_associations_to_insert = list(set(company_ids) - set(existing_company_ids))
+
+        for i in range(0, len(new_company_associations_to_insert), batch_size):
+            batch = new_company_associations_to_insert[i:i+batch_size]
+
+            # Create a raw SQL statement for bulk insert with conflict handling
+            # Build VALUES clause for batch insert
+            values_clause = ", ".join([f"({company_id}, '{target_collection_id}')" for company_id in batch])
+            
+            # ON CONFLICT DO NOTHING to honour unique constraint
+            sql = text(f"""
+INSERT INTO company_collection_associations (company_id, collection_id)
+VALUES {values_clause}
+ON CONFLICT DO NOTHING
+            """)
+            
+            db_session.execute(sql)
+            
             db_session.commit()
-            added_count += batch_added
+            added_count += len(batch) 
+            processed_count += len(batch)
 
             # Update progress
-            current_progress = i + batchLength
-            transfer_jobs[job_id]["progress"] = current_progress
-            transfer_jobs[job_id]["message"] = f"Processed {current_progress}/{total_companies} companies"
+            transfer_jobs[job_id]["progress"] = processed_count
+            transfer_jobs[job_id]["message"] = f"Processed {processed_count}/{total_companies} companies"
 
         # Mark as completed
         transfer_jobs[job_id]["status"] = "completed"
         transfer_jobs[job_id]["progress"] = total_companies
-        transfer_jobs[job_id]["message"] = f"Successfully transferred {added_count} companies"
+        transfer_jobs[job_id]["message"] = f"Successfully transferred {added_count} new companies ({total_companies - added_count} already existed)"
         transfer_jobs[job_id]["completed_at"] = datetime.utcnow()
 
     except Exception as e:
