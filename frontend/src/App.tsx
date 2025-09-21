@@ -50,6 +50,7 @@ function App() {
                     onClick={() => {
                       setSelectedCollectionId(collection.id);
                     }}
+                    key={collection.id}
                   >
                     {collection.collection_name}
                   </div>
