@@ -70,4 +70,59 @@ export async function moveSelectedCompaniesToCollection(companyIds: number[], co
         console.error("Error moving companies to collection:", error)
         throw error
     }
+}
+
+// New transfer interfaces
+export interface ITransferRequest {
+    target_collection_id: string;
+    company_ids?: number[];
+    transfer_all?: boolean;
+}
+
+export interface ITransferResponse {
+    job_id: string;
+    message: string;
+    total_companies: number;
+}
+
+export interface ITransferStatus {
+    job_id: string;
+    status: 'pending' | 'in_progress' | 'completed' | 'failed';
+    progress: number;
+    total: number;
+    message: string;
+    sourceCollectionName?: string;
+    targetCollectionName?: string;
+    completedAt?: number;  // Timestamp for sorting completed transfers
+}
+
+// Start a transfer operation
+export async function startTransfer(
+    sourceCollectionId: string,
+    targetCollectionId: string,
+    companyIds?: number[],
+    transferAll: boolean = false
+): Promise<ITransferResponse> {
+    try {
+        const response = await axios.post(`${BASE_URL}/collections/${sourceCollectionId}/transfer`, {
+            target_collection_id: targetCollectionId,
+            company_ids: companyIds,
+            transfer_all: transferAll
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error starting transfer:', error);
+        throw error;
+    }
+}
+
+// Get transfer status
+export async function getTransferStatus(jobId: string): Promise<ITransferStatus> {
+    try {
+        const response = await axios.get(`${BASE_URL}/collections/transfer-status/${jobId}`);
+        return response.data;
+    } catch (error) {
+        console.error('Error getting transfer status:', error);
+        throw error;
+    }
 } 
