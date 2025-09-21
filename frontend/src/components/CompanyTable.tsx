@@ -1,12 +1,17 @@
-import { DataGrid } from "@mui/x-data-grid";
+import { DataGrid, GridRowSelectionModel } from "@mui/x-data-grid";
+import { Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import { useEffect, useState } from "react";
 import { getCollectionsById, ICompany } from "../utils/jam-api";
 
-const CompanyTable = (props: { selectedCollectionId: string }) => {
+type CollectionMeta = { id: string; collection_name: string };
+
+const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollectionId: string }) => {
   const [response, setResponse] = useState<ICompany[]>([]);
   const [total, setTotal] = useState<number>();
   const [offset, setOffset] = useState<number>(0);
   const [pageSize, setPageSize] = useState(25);
+  const [rowSelectionModel, setRowSelectionModel] = useState<GridRowSelectionModel>([]);
+  const [targetCollectionId, setTargetCollectionId] = useState<string>("");
 
   useEffect(() => {
     getCollectionsById(props.selectedCollectionId, offset, pageSize).then(
@@ -21,30 +26,82 @@ const CompanyTable = (props: { selectedCollectionId: string }) => {
     setOffset(0);
   }, [props.selectedCollectionId]);
 
+  // If user clears all selections, also clear the dropdown value before disabling it
+  useEffect(() => {
+    if (rowSelectionModel.length === 0 && targetCollectionId !== "") {
+      setTargetCollectionId("");
+    }
+  }, [rowSelectionModel]);
+
+  // OPTIONAL: Reset dropdown when switching collections
+  // useEffect(() => {
+  //   setRowSelectionModel([]);
+  //   setTargetCollectionId("");
+  // }, [props.selectedCollectionId]);
+
   return (
-    <div style={{ height: 600, width: "100%" }}>
-      <DataGrid
-        rows={response}
-        rowHeight={30}
-        columns={[
-          { field: "liked", headerName: "Liked", width: 90 },
-          { field: "id", headerName: "ID", width: 90 },
-          { field: "company_name", headerName: "Company Name", width: 200 },
-        ]}
-        initialState={{
-          pagination: {
-            paginationModel: { page: 0, pageSize: 25 },
-          },
-        }}
-        rowCount={total}
-        pagination
-        checkboxSelection
-        paginationMode="server"
-        onPaginationModelChange={(newMeta) => {
-          setPageSize(newMeta.pageSize);
-          setOffset(newMeta.page * newMeta.pageSize);
-        }}
-      />
+    <div>
+      <div style={{ 
+        marginBottom: "24px", 
+        display: "flex", 
+        justifyContent: "flex-end",
+        alignItems: "center"
+      }}>
+        <FormControl 
+          style={{
+            minWidth: "240px",
+            maxWidth: "300px"
+          }} 
+          disabled={rowSelectionModel.length === 0}
+        >
+          <InputLabel id="move-items-to-collection">Move Selected To...</InputLabel>
+          <Select
+            labelId="move-items-to-collection"
+            label="Move Selected To..."
+            value={targetCollectionId}
+            onChange={(e) => setTargetCollectionId(e.target.value as string)}
+            size="small"
+          >
+            {props.allCollections
+              .filter((c) => c.id !== props.selectedCollectionId)
+              .map((c) => (
+                <MenuItem key={c.id} value={c.id}>{c.collection_name}</MenuItem>
+              ))}
+          </Select>
+        </FormControl>
+      </div>
+      <div style={{ 
+        height: 600, 
+        width: "100%",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        borderRadius: "8px",
+        overflow: "hidden"
+      }}>
+        <DataGrid
+          rows={response}
+          rowHeight={30}
+          columns={[
+            { field: "liked", headerName: "Liked", width: 90 },
+            { field: "id", headerName: "ID", width: 90 },
+            { field: "company_name", headerName: "Company Name", width: 200 },
+          ]}
+          initialState={{
+            pagination: {
+              paginationModel: { page: 0, pageSize: 25 },
+            },
+          }}
+          rowCount={total}
+          pagination
+          checkboxSelection
+          paginationMode="server"
+          rowSelectionModel={rowSelectionModel}
+          onRowSelectionModelChange={(newModel) => setRowSelectionModel(newModel)}
+          onPaginationModelChange={(newMeta) => {
+            setPageSize(newMeta.pageSize);
+            setOffset(newMeta.page * newMeta.pageSize);
+          }}
+        />
+      </div>
     </div>
   );
 };

@@ -59,7 +59,13 @@ function App() {
           </div>
           <div className="w-4/5 ml-4">
             {selectedCollectionId && (
-              <CompanyTable selectedCollectionId={selectedCollectionId} />
+              <CompanyTable
+                selectedCollectionId={selectedCollectionId}
+                allCollections={(collectionResponse || []).map((c) => ({
+                  id: c.id,
+                  collection_name: c.collection_name,
+                }))}
+              />
             )}
           </div>
         </div>
