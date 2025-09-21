@@ -265,6 +265,9 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
           rowCount={total}
           pagination
           checkboxSelection
+          slotProps={{
+            baseCheckbox: { disabled: selectAll }
+          }}
           paginationMode="server"
           rowSelectionModel={selectAll ? [] : rowSelectionModel}
           onRowSelectionModelChange={(newModel) => {
