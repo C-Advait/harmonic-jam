@@ -1,7 +1,7 @@
 import { DataGrid, GridRowSelectionModel } from "@mui/x-data-grid";
-import { Select, MenuItem, FormControl, InputLabel } from "@mui/material";
+import { Select, MenuItem, FormControl, InputLabel, Button } from "@mui/material";
 import { useEffect, useState } from "react";
-import { getCollectionsById, ICompany } from "../utils/jam-api";
+import { getCollectionsById, ICompany, moveSelectedCompaniesToCollection } from "../utils/jam-api";
 
 type CollectionMeta = { id: string; collection_name: string };
 
@@ -39,36 +39,63 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
   //   setTargetCollectionId("");
   // }, [props.selectedCollectionId]);
 
+  async function handleCompanyMove() {
+    try {
+      const companyIds = rowSelectionModel as number[];
+      await moveSelectedCompaniesToCollection(companyIds, targetCollectionId);
+      
+      // Clear selections
+      setRowSelectionModel([]);
+      setTargetCollectionId("");
+    } catch (error) {
+      console.error('Error moving companies:', error);
+    }
+  }
+
   return (
     <div>
       <div style={{ 
-        marginBottom: "24px", 
-        display: "flex", 
-        justifyContent: "flex-end",
-        alignItems: "center"
-      }}>
-        <FormControl 
-          style={{
-            minWidth: "240px",
-            maxWidth: "300px"
-          }} 
-          disabled={rowSelectionModel.length === 0}
-        >
-          <InputLabel id="move-items-to-collection">Move Selected To...</InputLabel>
-          <Select
-            labelId="move-items-to-collection"
-            label="Move Selected To..."
-            value={targetCollectionId}
-            onChange={(e) => setTargetCollectionId(e.target.value as string)}
+          marginBottom: "24px", 
+          display: "flex", 
+          justifyContent: "flex-end",
+          alignItems: "center"
+        }}>
+        <div style={{
+          paddingRight: "10px"
+        }}>
+          <FormControl 
+            style={{
+              minWidth: "200px",
+              maxWidth: "350px",
+            }} 
             size="small"
+            disabled={rowSelectionModel.length === 0}
           >
-            {props.allCollections
-              .filter((c) => c.id !== props.selectedCollectionId)
-              .map((c) => (
-                <MenuItem key={c.id} value={c.id}>{c.collection_name}</MenuItem>
-              ))}
-          </Select>
-        </FormControl>
+            <InputLabel id="move-items-to-collection">Move Companies To...</InputLabel>
+            <Select
+              labelId="move-items-to-collection"
+              value={targetCollectionId}
+              onChange={(e) => setTargetCollectionId(e.target.value as string)}
+            >
+              {props.allCollections
+                .filter((c) => c.id !== props.selectedCollectionId)
+                .map((c) => (
+                  <MenuItem key={c.id} value={c.id}>{c.collection_name}</MenuItem>
+                ))}
+            </Select>
+          </FormControl>
+        </div>
+        <div>
+          <Button 
+            style={{
+              background: "blue"
+            }}
+            onClick={handleCompanyMove}
+            disabled={rowSelectionModel.length === 0 || !targetCollectionId}
+          >
+            Move
+          </Button>
+        </div>
       </div>
       <div style={{ 
         height: 600, 

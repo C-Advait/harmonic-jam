@@ -58,3 +58,16 @@ export async function getCollectionsMetadata(): Promise<ICollection[]> {
         throw error;
     }
 }
+
+export async function moveSelectedCompaniesToCollection(companyIds: number[], collectionToMoveToId: string): Promise<any> {
+    try {
+        const response = await axios.post(`${BASE_URL}/collections/addCompaniesToCollection`, {
+            company_ids: companyIds,
+            collection_id: collectionToMoveToId
+        })
+        return response.data
+    } catch (error) {
+        console.error("Error moving companies to collection:", error)
+        throw error
+    }
+} 
