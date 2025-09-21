@@ -181,7 +181,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
               maxWidth: "350px",
             }} 
             size="small"
-            disabled={rowSelectionModel.length === 0}
+            disabled={!selectAll && rowSelectionModel.length === 0}
           >
             <InputLabel id="move-items-to-collection">Move Companies To...</InputLabel>
             <Select
@@ -203,7 +203,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
               background: "blue"
             }}
             onClick={handleCompanyMove}
-            disabled={(rowSelectionModel.length === 0 && !selectAll) || !targetCollectionId}
+            disabled={(!selectAll && rowSelectionModel.length === 0) || !targetCollectionId}
           >
             Move
           </Button>
@@ -295,11 +295,12 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
           return 0;
         });
 
+        const totalTransfers = sortedTransfers.length;
         return sortedTransfers.map(([jobId, status], index) => (
         <TransferProgress
           key={jobId}
           status={status}
-          index={index}
+          index={totalTransfers - 1 - index}
           onClose={() => {
             setActiveTransfers(prev => {
               const newMap = new Map(prev);
