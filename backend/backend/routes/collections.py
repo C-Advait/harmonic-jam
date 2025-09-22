@@ -76,52 +76,6 @@ class AddCompaniesToCollectionRequest(BaseModel):
     collection_id: uuid.UUID
     company_ids: list[int]
 
-
-@router.post("/addCompaniesToCollection")
-def add_companies_to_collection(
-    request: AddCompaniesToCollectionRequest,
-    db: Session = Depends(database.get_db),
-):
-    # Check if collection exists
-    collection = db.query(database.CompanyCollection).filter(
-        database.CompanyCollection.id == request.collection_id
-    ).first()
-    
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    
-    # Check if companies exist
-    existing_companies = db.query(database.Company).filter(
-        database.Company.id.in_(request.company_ids)
-    ).all()
-    
-    if len(existing_companies) != len(request.company_ids):
-        raise HTTPException(status_code=404, detail="One or more companies not found")
-    
-    # Add companies to collection (avoid duplicates)
-    added_count = 0
-    for company_id in request.company_ids:
-        existing_association = db.query(database.CompanyCollectionAssociation).filter(
-            database.CompanyCollectionAssociation.company_id == company_id,
-            database.CompanyCollectionAssociation.collection_id == request.collection_id
-        ).first()
-        
-        if not existing_association:
-            association = database.CompanyCollectionAssociation(
-                company_id=company_id,
-                collection_id=request.collection_id
-            )
-            db.add(association)
-            added_count += 1
-    
-    db.commit()
-    
-    return {
-        "message": f"Successfully added {added_count} companies to collection",
-        "collection_id": request.collection_id,
-        "added_count": added_count
-    }
-
 # In-memory storage for transfer jobs
 transfer_jobs = {}
 
