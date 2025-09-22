@@ -32,6 +32,14 @@ would give a better sense of time varying conditions of the CompanyCollectionAss
 the number of overhead db reads this would have resulted in, even in the case where it is not useful, such as no race condition. Therefore, I chose to have a slower
 task on the user end, which incurs the 100ms per redundant row, instead of having repeated unnecessary reads to the db.
 
+### Batch vs Streaming Tradeoff
+Currently the implementation makes a decision to batch writes to the database to the backend
+in batches of 20. This was made instead of doing all writes in a loop, because the connection + transaction
+overhead would have potentially made that much slower and use up more resources for large jobs.
+
+The reason we do batches instead of a single commit is to give the user some sense of progress. The most resource-efficient route would be bulk
+writing all changes in one commit, but this would result in us being unable to give the user any sense of progress. 
+
 ## UI/UX Improvements
 
 ### Pagination Fixes
