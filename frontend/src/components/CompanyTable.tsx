@@ -18,18 +18,23 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
   const [offset, setOffset] = useState<number>(0);
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const [rowSelectionModel, setRowSelectionModel] = useState<GridRowSelectionModel>([]);
   const [targetCollectionId, setTargetCollectionId] = useState<string>("");
   const [allSelected, setAllSelected] = useState<boolean>(false);
   const [activeTransfers, setActiveTransfers] = useState<Map<string, ITransferStatus>>(new Map());
 
   useEffect(() => {
+    setIsLoading(true);
     getCollectionsById(props.selectedCollectionId, offset, pageSize).then(
       (newResponse) => {
         setResponse(newResponse.companies);
         setTotal(newResponse.total);
+        setIsLoading(false);
       }
-    );
+    ).catch(() => {
+      setIsLoading(false);
+    });
   }, [props.selectedCollectionId, offset, pageSize]);
 
   useEffect(() => {
@@ -289,13 +294,14 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
         <DataGrid
           rows={response}
           rowHeight={30}
+          loading={isLoading}
           columns={[
-            { 
-              field: "liked", 
-              headerName: "Liked", 
+            {
+              field: "liked",
+              headerName: "Liked",
               width: 90,
               renderCell: (params) => (
-                <span style={{ 
+                <span style={{
                   color: params.value === true ? 'green' : 'inherit',
                 }}>
                   {params.value ? 'true' : 'false'}
