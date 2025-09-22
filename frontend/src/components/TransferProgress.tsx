@@ -11,11 +11,7 @@ interface TransferProgressProps {
 }
 
 const TransferProgress: React.FC<TransferProgressProps> = ({ status, onClose, onRetry, index = 0 }) => {
-  if (!status) return null;
-
-  const progress = status.total > 0 ? (status.progress / status.total) * 100 : 0;
-  const isCompleted = status.status === 'completed';
-  const isFailed = status.status === 'failed';
+  const isCompleted = status?.status === 'completed';
 
   // Auto-close after 7 seconds if completed
   React.useEffect(() => {
@@ -24,6 +20,11 @@ const TransferProgress: React.FC<TransferProgressProps> = ({ status, onClose, on
       return () => clearTimeout(timer);
     }
   }, [isCompleted, onClose]);
+
+  if (!status) return null;
+
+  const progress = status.total > 0 ? (status.progress / status.total) * 100 : 0;
+  const isFailed = status.status === 'failed';
 
   return (
     <Snackbar
