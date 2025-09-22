@@ -1,4 +1,4 @@
-import { DataGrid, GridRowSelectionModel } from "@mui/x-data-grid";
+import { DataGrid, GridFooterContainer, GridPagination, GridRowSelectionModel } from "@mui/x-data-grid";
 import { Select, MenuItem, FormControl, InputLabel, Button, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import {
@@ -49,7 +49,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
     if (rowSelectionModel.length === 0 && targetCollectionId !== "") {
       setTargetCollectionId("");
     }
-  }, [rowSelectionModel]);
+  }, [rowSelectionModel, targetCollectionId]);
 
   //reload "transfer progress bars" on page reload
   useEffect(() => {
@@ -188,6 +188,22 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
       setRowSelectionModel(response.map(r => r.id));
     }
   }
+
+  const CustomFooter = () => {
+    const selectedCount = allSelected ? total ?? 0 : rowSelectionModel.length;
+    return (
+      <GridFooterContainer sx={{ justifyContent: 'space-between' }}>
+        <div style={{ paddingLeft: 12 }}>
+          {selectedCount > 0 &&
+            <Typography variant="body2">
+              {selectedCount.toLocaleString()} row{selectedCount > 1 ? 's' : ''} selected
+            </Typography>
+          }
+        </div>
+        <GridPagination />
+      </GridFooterContainer>
+    );
+  };
 
   return (
     <div>
@@ -344,6 +360,9 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
               setCurrentPage(newMeta.page);
               setOffset(newMeta.page * newMeta.pageSize);
             }
+          }}
+          slots={{
+            footer: CustomFooter
           }}
         />
       </div>
