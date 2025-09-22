@@ -1,10 +1,11 @@
 import uuid
-from typing import Optional
+from typing import Dict, Optional, TypedDict
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from sqlalchemy import func, text
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from backend.db import database
@@ -26,6 +27,34 @@ class CompanyCollectionMetadata(BaseModel):
 
 class CompanyCollectionOutput(CompanyBatchOutput, CompanyCollectionMetadata):
     pass
+
+class TransferStatus(BaseModel):
+    job_id: str
+    status: str  # "pending", "in_progress", "completed", "failed"
+    progress: int
+    total: int
+    message: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+
+class TransferJobDict(TypedDict):
+    job_id: str
+    status: str  # "pending", "in_progress", "completed", "failed"
+    progress: int
+    total: int
+    message: str
+    started_at: datetime
+    completed_at: Optional[datetime]
+
+# In-memory storage for transfer jobs
+TRANSFER_JOBS: Dict[str, TransferJobDict] = {}
+
+# Model for a request to the "transfer" endpoint
+# Allows us to transfer from one list to another 
+class TransferCompaniesRequest(BaseModel):
+    target_collection_id: uuid.UUID
+    company_ids: Optional[list[int]] = None
+    transfer_all: bool = False
 
 
 @router.get("", response_model=list[CompanyCollectionMetadata])
@@ -76,23 +105,6 @@ class AddCompaniesToCollectionRequest(BaseModel):
     collection_id: uuid.UUID
     company_ids: list[int]
 
-# In-memory storage for transfer jobs
-transfer_jobs = {}
-
-class TransferCompaniesRequest(BaseModel):
-    target_collection_id: uuid.UUID
-    company_ids: Optional[list[int]] = None
-    transfer_all: bool = False
-
-class TransferStatusResponse(BaseModel):
-    job_id: str
-    status: str  # "pending", "in_progress", "completed", "failed"
-    progress: int
-    total: int
-    message: str
-    started_at: datetime
-    completed_at: Optional[datetime] = None
-
 def process_transfer_in_background(job_id: str, source_collection_id: uuid.UUID,
                                    target_collection_id: uuid.UUID,
                                    company_ids: list[int], db_session: Session):
@@ -104,8 +116,8 @@ def process_transfer_in_background(job_id: str, source_collection_id: uuid.UUID,
         processed_count = 0
 
         # Update job status
-        transfer_jobs[job_id]["status"] = "in_progress"
-        transfer_jobs[job_id]["total"] = total_companies
+        TRANSFER_JOBS[job_id]["status"] = "in_progress"
+        TRANSFER_JOBS[job_id]["total"] = total_companies
 
         # Get all the associations that already exist for the request
         # Once at the start of the request
@@ -128,38 +140,35 @@ def process_transfer_in_background(job_id: str, source_collection_id: uuid.UUID,
         for i in range(0, len(new_company_associations_to_insert), batch_size):
             batch = new_company_associations_to_insert[i:i+batch_size]
 
-            # Create a raw SQL statement for bulk insert with conflict handling
-            # Build VALUES clause for batch insert
-            values_clause = ", ".join([f"({company_id}, '{target_collection_id}')" for company_id in batch])
+            # Create a bulk insert statement with conflict handling
+            stmt = insert(database.CompanyCollectionAssociation).values([
+                {'company_id': company_id, 'collection_id': target_collection_id}
+                for company_id in batch
+            ]).on_conflict_do_nothing(
+                constraint='uq_company_collection'  # The unique constraint name from the model
+            )
             
-            # ON CONFLICT DO NOTHING to honour unique constraint
-            sql = text(f"""
-INSERT INTO company_collection_associations (company_id, collection_id)
-VALUES {values_clause}
-ON CONFLICT DO NOTHING
-            """)
-            
-            db_session.execute(sql)
+            db_session.execute(stmt)
             
             db_session.commit()
             added_count += len(batch) 
             processed_count += len(batch)
 
             # Update progress
-            transfer_jobs[job_id]["progress"] = processed_count
-            transfer_jobs[job_id]["message"] = f"Processed {processed_count}/{total_companies} companies"
+            TRANSFER_JOBS[job_id]["progress"] = processed_count
+            TRANSFER_JOBS[job_id]["message"] = f"Processed {processed_count}/{total_companies} companies"
 
         # Mark as completed
-        transfer_jobs[job_id]["status"] = "completed"
-        transfer_jobs[job_id]["progress"] = total_companies
-        transfer_jobs[job_id]["message"] = f"Successfully transferred {added_count} new companies ({total_companies - added_count} already existed)"
-        transfer_jobs[job_id]["completed_at"] = datetime.utcnow()
+        TRANSFER_JOBS[job_id]["status"] = "completed"
+        TRANSFER_JOBS[job_id]["progress"] = total_companies
+        TRANSFER_JOBS[job_id]["message"] = f"Successfully transferred {added_count} new companies ({total_companies - added_count} already existed)"
+        TRANSFER_JOBS[job_id]["completed_at"] = datetime.utcnow()
 
     except Exception as e:
         # Mark as failed
-        transfer_jobs[job_id]["status"] = "failed"
-        transfer_jobs[job_id]["message"] = f"Transfer failed: {str(e)}"
-        transfer_jobs[job_id]["completed_at"] = datetime.utcnow()
+        TRANSFER_JOBS[job_id]["status"] = "failed"
+        TRANSFER_JOBS[job_id]["message"] = f"Transfer failed: {str(e)}"
+        TRANSFER_JOBS[job_id]["completed_at"] = datetime.utcnow()
     finally:
         db_session.close()
 
@@ -216,7 +225,7 @@ def transfer_companies(
 
     # Create job
     job_id = str(uuid.uuid4())
-    transfer_jobs[job_id] = {
+    TRANSFER_JOBS[job_id] = {
         "job_id": job_id,
         "status": "pending",
         "progress": 0,
@@ -246,15 +255,15 @@ def transfer_companies(
     }
 
 @router.get("/transfer-status/{job_id}")
-def get_transfer_status(job_id: str) -> TransferStatusResponse:
+def get_transfer_status(job_id: str) -> TransferStatus:
     """Get the status of a transfer operation"""
 
-    if job_id not in transfer_jobs:
+    if job_id not in TRANSFER_JOBS:
         raise HTTPException(status_code=404, detail="Transfer job not found")
 
-    job_data = transfer_jobs[job_id]
+    job_data = TRANSFER_JOBS[job_id]
 
-    return TransferStatusResponse(
+    return TransferStatus(
         job_id=job_data["job_id"],
         status=job_data["status"],
         progress=job_data["progress"],
