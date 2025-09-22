@@ -1,5 +1,5 @@
 import { DataGrid, GridRowSelectionModel } from "@mui/x-data-grid";
-import { Select, MenuItem, FormControl, InputLabel, Button, Checkbox, FormControlLabel, Typography } from "@mui/material";
+import { Select, MenuItem, FormControl, InputLabel, Button, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import {
   getCollectionsById,
@@ -19,7 +19,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
   const [pageSize, setPageSize] = useState(25);
   const [rowSelectionModel, setRowSelectionModel] = useState<GridRowSelectionModel>([]);
   const [targetCollectionId, setTargetCollectionId] = useState<string>("");
-  const [selectAll, setSelectAll] = useState<boolean>(false);
+  const [allSelected, setAllSelected] = useState<boolean>(false);
   const [activeTransfers, setActiveTransfers] = useState<Map<string, ITransferStatus>>(new Map());
 
   useEffect(() => {
@@ -33,7 +33,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
 
   useEffect(() => {
     setOffset(0);
-    setSelectAll(false);
+    setAllSelected(false);
     setRowSelectionModel([]);
   }, [props.selectedCollectionId]);
 
@@ -43,6 +43,11 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
       setTargetCollectionId("");
     }
   }, [rowSelectionModel]);
+
+  //reload "transfer progress bars" on page reload
+  useEffect(() => {
+    
+  })
 
   // OPTIONAL: Reset dropdown when switching collections
   // useEffect(() => {
@@ -55,11 +60,24 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
       const sourceCollection = props.allCollections.find(c => c.id === props.selectedCollectionId);
       const targetCollection = props.allCollections.find(c => c.id === targetCollectionId);
 
+      // Compute actual selected IDs based on allSelected
+      let selectedIds: number[] | undefined;
+      let transferAll = false;
+
+      if (allSelected) {
+        // All selected - use transfer_all
+        transferAll = true;
+        selectedIds = undefined;
+      } else {
+        selectedIds = rowSelectionModel as number[];
+        transferAll = false;
+      }
+
       const response = await startTransfer(
         props.selectedCollectionId,
         targetCollectionId,
-        selectAll ? undefined : (rowSelectionModel as number[]),
-        selectAll
+        selectedIds,
+        transferAll
       );
 
       // Add to active transfers map with collection names
@@ -85,7 +103,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
       // Clear selections immediately
       setRowSelectionModel([]);
       setTargetCollectionId("");
-      setSelectAll(false);
+      setAllSelected(false);
     } catch (error) {
       console.error('Error starting transfer:', error);
     }
@@ -156,11 +174,17 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
     }
   }
 
-  function handleSelectAllChange(event: React.ChangeEvent<HTMLInputElement>) {
-    setSelectAll(event.target.checked);
-    if (event.target.checked) {
-      // Clear individual selections when selecting all
+  // Handle when user clicks "Select all X in collection" or "Clear selection"
+  function handleSelectAllInCollection() {
+    if (allSelected) {
+      // Clear all selections
+      setAllSelected(false);
       setRowSelectionModel([]);
+    } else {
+      // Select all in collection
+      setAllSelected(true);
+      // Set current page items as selected in the model
+      setRowSelectionModel(response.map(r => r.id));
     }
   }
 
@@ -181,7 +205,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
               maxWidth: "350px",
             }} 
             size="small"
-            disabled={!selectAll && rowSelectionModel.length === 0}
+            disabled={!allSelected && rowSelectionModel.length === 0}
           >
             <InputLabel id="move-items-to-collection">Move Companies To...</InputLabel>
             <Select
@@ -203,34 +227,59 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
               background: "blue"
             }}
             onClick={handleCompanyMove}
-            disabled={(!selectAll && rowSelectionModel.length === 0) || !targetCollectionId}
+            disabled={(!allSelected && rowSelectionModel.length === 0) || !targetCollectionId}
           >
             Move
           </Button>
         </div>
       </div>
-      <div style={{
-        marginBottom: "8px",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center"
-      }}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={selectAll}
-              onChange={handleSelectAllChange}
-              disabled={!total || total === 0}
-            />
-          }
-          label={`Select all ${total || 0} companies in this collection`}
-        />
-        {selectAll && (
-          <Typography variant="caption" color="text.secondary">
-            All companies will be moved
+      {/* Gmail-style selection banner */}
+      {(rowSelectionModel.length === response.length && response.length > 0 && !allSelected) && (
+        <div style={{
+          marginBottom: "8px",
+          padding: "8px 16px",
+          backgroundColor: "black",
+          borderRadius: "4px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          <Typography variant="body2" style={{ color: "white" }}>
+            All {response.length} items on this page are selected.{" "}
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleSelectAllInCollection}
+              style={{ textTransform: "none", padding: "0 4px" }}
+            >
+              Select all {total} items in collection
+            </Button>
           </Typography>
-        )}
-      </div>
+        </div>
+      )}
+      {allSelected && (
+        <div style={{
+          marginBottom: "8px",
+          padding: "8px 16px",
+          backgroundColor: "black",
+          borderRadius: "4px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          <Typography variant="body2" style={{ color: "white" }}>
+            All {total} items are selected.{" "}
+            <Button
+              variant="text"
+              size="small"
+              onClick={handleSelectAllInCollection}
+              style={{ textTransform: "none", padding: "0 4px" }}
+            >
+              Clear selection
+            </Button>
+          </Typography>
+        </div>
+      )}
       <div style={{ 
         height: 600, 
         width: "100%",
@@ -265,17 +314,22 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
           rowCount={total}
           pagination
           checkboxSelection
-          slotProps={{
-            baseCheckbox: { disabled: selectAll }
-          }}
           paginationMode="server"
-          rowSelectionModel={selectAll ? [] : rowSelectionModel}
+          rowSelectionModel={
+            allSelected
+              ? response.map(r => r.id)
+              : rowSelectionModel
+          }
           onRowSelectionModelChange={(newModel) => {
-            if (!selectAll) {
+            if (allSelected) {
+              // When all selected, any change means user is deselecting all
+              // Clear allSelected and update to the new selection
+              setAllSelected(false);
+              setRowSelectionModel(newModel);
+            } else {
               setRowSelectionModel(newModel);
             }
           }}
-          isRowSelectable={() => !selectAll}
           onPaginationModelChange={(newMeta) => {
             setPageSize(newMeta.pageSize);
             setOffset(newMeta.page * newMeta.pageSize);
