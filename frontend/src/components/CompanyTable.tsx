@@ -218,8 +218,11 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
         <div>
           <Button
             style={{
-              background: "blue"
+              background: "blue",
+              height: 40
             }}
+            size="small"
+            variant="contained"
             onClick={handleCompanyMove}
             disabled={(!allSelected && rowSelectionModel.length === 0) || !targetCollectionId}
           >
