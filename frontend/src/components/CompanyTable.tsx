@@ -49,12 +49,6 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
     
   })
 
-  // OPTIONAL: Reset dropdown when switching collections
-  // useEffect(() => {
-  //   setRowSelectionModel([]);
-  //   setTargetCollectionId("");
-  // }, [props.selectedCollectionId]);
-
   async function handleCompanyMove() {
     try {
       const sourceCollection = props.allCollections.find(c => c.id === props.selectedCollectionId);
