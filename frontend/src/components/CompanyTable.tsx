@@ -17,6 +17,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
   const [total, setTotal] = useState<number>();
   const [offset, setOffset] = useState<number>(0);
   const [pageSize, setPageSize] = useState(25);
+  const [currentPage, setCurrentPage] = useState(0);
   const [rowSelectionModel, setRowSelectionModel] = useState<GridRowSelectionModel>([]);
   const [targetCollectionId, setTargetCollectionId] = useState<string>("");
   const [allSelected, setAllSelected] = useState<boolean>(false);
@@ -33,6 +34,7 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
 
   useEffect(() => {
     setOffset(0);
+    setCurrentPage(0);
     setAllSelected(false);
     setRowSelectionModel([]);
   }, [props.selectedCollectionId]);
@@ -303,13 +305,9 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
             { field: "id", headerName: "ID", width: 90 },
             { field: "company_name", headerName: "Company Name", width: 200 },
           ]}
-          initialState={{
-            pagination: {
-              paginationModel: { page: 0, pageSize: 25 },
-            },
-          }}
           rowCount={total}
           pagination
+          paginationModel={{ page: currentPage, pageSize: pageSize }}
           checkboxSelection
           paginationMode="server"
           rowSelectionModel={
@@ -328,8 +326,18 @@ const CompanyTable = (props: { allCollections: CollectionMeta[]; selectedCollect
             }
           }}
           onPaginationModelChange={(newMeta) => {
-            setPageSize(newMeta.pageSize);
-            setOffset(newMeta.page * newMeta.pageSize);
+            // Check if page size is changing
+            if (newMeta.pageSize !== pageSize) {
+              // Recalculate page to maintain position
+              const newPage = Math.floor(offset / newMeta.pageSize);
+              setCurrentPage(newPage);
+              setPageSize(newMeta.pageSize);
+              setOffset(newPage * newMeta.pageSize);
+            } else {
+              // Normal page navigation
+              setCurrentPage(newMeta.page);
+              setOffset(newMeta.page * newMeta.pageSize);
+            }
           }}
         />
       </div>
